@@ -136,7 +136,11 @@ function drawHistory() {
 			var sum = 0
 			var count = 0
 			_.each(db.history.slice(Math.max(0, db.history.length - n)), function (h) {
-				sum += _.lerp(0, 1, tau / 4, 0, angleBetween(h.color, h.guess))
+				if (mag(h.guess) == 0) {
+					sum += 0
+				} else {
+					sum += _.lerp(0, 1, tau / 4, 0, angleBetween(h.color, h.guess))
+				}
 				count += 1
 			})
 			return sum / count
@@ -175,6 +179,8 @@ function drawMain() {
 }
 
 $(function () {
+	$('body').append($('<a href="https://github.com/dglittle/color-test"><img width="64px" style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png" alt="Fork me on GitHub"></a>'))
+
 	if (!localStorage.db) {
 		localStorage.db = _.json({
 			history : []
