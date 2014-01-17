@@ -1,0 +1,188 @@
+<html>
+<head>
+<title>untitled</title>
+<meta name="viewport" content="width=device-width, user-scalable=no">
+<style>
+
+body {
+    margin: 5px;
+}
+table {
+    border-collapse: collapse;
+}
+th, td {
+    padding: 0px;
+}
+
+</style>
+</head>
+<body>
+<script src="http://code.jquery.com/jquery-2.0.3.min.js"></script>
+<script src="http://dglittle.github.io/gl519/index.js"></script>
+<script src="http://dglittle.github.io/gl519/random.js"></script>
+<script src="utils.js"></script>
+<script>
+
+tau = Math.PI * 2
+
+function dot(a, b) {
+	var sum = 0
+	for (var i = 0; i < a.length; i++)
+		sum += a[i] * b[i]
+	return sum
+}
+
+function mag(a) {
+	return Math.sqrt(dot(a, a))
+}
+
+function angleBetween(a, b) {
+	return Math.acos(dot(a, b) / (mag(a) * mag(b)))
+}
+
+function createRandomColor() {
+	return _.map(_.shuffle([.999999, Math.random(), Math.random()]), function (x) { return Math.floor(x * 256) })
+}
+
+function colorToCss(c) {
+	return 'rgb(' + c.join(',') + ')'
+}
+
+function drawColorSquare(size, c) {
+	var d = $('<div style="width:' + size + 'px;height:' + size + 'px"/>')
+	d.css('background', colorToCss(c))
+	return d
+}
+
+function addSliderControl(d, cb) {
+	function getRelPos(d, e) {
+		var offset = d.offset()
+		return [e.pageX - offset.left, e.pageY - offset.top]
+	}
+
+	d.mousedown(function (e) {
+		e.preventDefault()
+		var pos = getRelPos(d, e)
+		cb(pos[0], pos[1])
+
+        var oldMove = document.onmousemove
+        document.onmousemove = function (e) {
+			var pos = getRelPos(d, e)
+			cb(pos[0], pos[1])
+        }
+        
+        var oldUp = document.onmouseup
+        document.onmouseup = function (e) {
+            document.onmousemove = oldMove
+            document.onmouseup = oldUp
+        }
+	})
+}
+
+function drawColorGradient(comp, init, cb) {
+	function getColor(x) {
+		var c = [0, 0, 0]
+		c[comp] = Math.floor(x)
+		return c
+	}
+	var h = 40
+	var w = 300
+	var d = $('<div style="width:' + w + 'px;height:' + h + 'px;"/>')
+	var slider = $('<div style="width:3px;height:' + h + 'px;z-index:100;background:linear-gradient(to bottom, #ffffff 0%,#000000 100%);position:relative;float:left;margin-right:-3px"/>').css('left', '0px')
+	d.append(slider)
+	d.append($('<div style="width:' + w + 'px;height:' + h + 'px;float:left"/>').css('background', 'linear-gradient(to right, black 0%,' + colorToCss(getColor(255)) + ' 100%)'))
+	var square = $('<div style="width:' + h + 'px;height:' + h + 'px;margin-right:5px;background:black"/>')
+	var update = function (x) {
+		if (x < 0) x = 0
+		if (x > w - 3) x = w - 3
+		slider.css('left', x + 'px')
+		x = Math.floor(_.lerp(0, 0, w - 3, 255, x))
+		square.css('background', colorToCss(getColor(x)))
+		cb(x)
+	}
+	addSliderControl(d, update)
+	if (init != null)
+		update(_.lerp(0, 0, 255, w - 3, init))
+	return _.splitHorz(null, null, square, d, false)
+}
+
+function drawColorGradients(c) {
+	var d = $('<div/>')
+	_.each(_.range(3), function (i) {
+		var dd = drawColorGradient(i, c[i], function (x) {
+			c[i] = x
+		})
+		if (i != 0) dd.css('margin-top', '5px')
+		d.append(dd)
+	})
+	return d
+}
+
+function drawSquareWithControls(c1, c2) {
+	var size = 40 * 3 + 2 * 5
+	var square = drawColorSquare(size, c1).css('margin-right', '5px')
+	var controls = drawColorGradients(c2)
+	return _.splitHorz(null, null, square, controls, false)
+}
+
+function drawHistory() {
+	try {
+		var db = _.unJson(localStorage.db)
+		var prev = db.history[db.history.length - 1]
+		var color = drawSquareWithControls(prev.color, prev.color).css('margin-bottom', '5px')
+		var guess = drawSquareWithControls(prev.guess, prev.guess)
+
+		function getAverage(n) {
+			var sum = 0
+			var count = 0
+			_.each(db.history.slice(Math.max(0, db.history.length - n)), function (h) {
+				sum += _.lerp(0, 1, tau / 4, 0, angleBetween(h.color, h.guess))
+				count += 1
+			})
+			return sum / count
+		}
+
+		var notes = $('<div/>')
+		if (db.history.length > 0) {
+			notes.append($('<div/>').text('your score: ' + getAverage(1)))
+			notes.append($('<div/>').text('your average over past 10: ' + getAverage(10)))
+		}
+
+		return _.splitVert(null, null, _.splitVert(null, null, color, guess, false), notes, false)
+	} catch (e) {
+		return $('<div/>')
+	}
+}
+
+function drawMain() {
+	var d = $('<div/>')
+	var c = createRandomColor()
+	var guess = [0, 0, 0]
+	d.append(drawSquareWithControls(c, guess))
+	d.append($('<button/>').text('done').click(function () {
+		var db = _.unJson(localStorage.db)
+		db.history.push({
+			time : _.time(),
+			color : c,
+			guess : guess
+		})
+		localStorage.db = _.json(db)
+
+		$('body').empty().append(drawMain())
+	}).css('margin-bottom', '10px'))
+	d.append(drawHistory())
+	return d
+}
+
+$(function () {
+	if (!localStorage.db) {
+		localStorage.db = _.json({
+			history : []
+		})
+	}
+	$('body').append(drawMain())
+})
+
+</script>
+</body>
+</html>
